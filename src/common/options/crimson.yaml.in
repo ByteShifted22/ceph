@@ -18,7 +18,7 @@ options:
 - name: crimson_cpu_num
   type: uint
   level: advanced
-  default: 0
+  default: 3
   desc: The number of CPUs to use for serving seastar reactors per OSD without CPU pinning.
   long_desc: The number of CPUs to use for serving seastar reactors per OSD without CPU pinning.
              overridden if crimson_cpu_set is set.

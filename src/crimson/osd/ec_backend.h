@@ -17,6 +17,7 @@ public:
   ECBackend(shard_id_t shard,
 	    CollectionRef coll,
 	    crimson::osd::ShardServices& shard_services,
+	    uint32_t store_index,
 	    const ec_profile_t& ec_profile,
 	    uint64_t stripe_width,
 	    DoutPrefixProvider &dpp);

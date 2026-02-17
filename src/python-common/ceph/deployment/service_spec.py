@@ -1182,7 +1182,7 @@ class ServiceSpec(object):
                 continue
             if hasattr(val, 'to_json'):
                 val = val.to_json()
-            if val:
+            if val is not None:
                 c[key] = val
 
         if getattr(self, 'termination_grace_period_seconds', None) is not None:
@@ -1350,6 +1350,7 @@ class NFSServiceSpec(ServiceSpec):
                  tls_debug: bool = False,
                  tls_min_version: Optional[str] = None,
                  tls_ciphers: Optional[str] = None,
+                 targets: Optional[List[str]] = None,
                  ):
         assert service_type == 'nfs'
         super(NFSServiceSpec, self).__init__(
@@ -1358,7 +1359,7 @@ class NFSServiceSpec(ServiceSpec):
             config=config, networks=networks, extra_container_args=extra_container_args,
             extra_entrypoint_args=extra_entrypoint_args, custom_configs=custom_configs,
             ip_addrs=ip_addrs, ssl=ssl, ssl_cert=ssl_cert, ssl_key=ssl_key, ssl_ca_cert=ssl_ca_cert,
-            certificate_source=certificate_source, custom_sans=custom_sans)
+            certificate_source=certificate_source, custom_sans=custom_sans, targets=targets)
 
         self.port = port
 
@@ -1749,6 +1750,7 @@ class NvmeofServiceSpec(ServiceSpec):
                  extra_container_args: Optional[GeneralArgList] = None,
                  extra_entrypoint_args: Optional[GeneralArgList] = None,
                  custom_configs: Optional[List[CustomConfig]] = None,
+                 targets: Optional[List[str]] = None,
                  ):
         assert service_type == 'nvmeof'
         super(NvmeofServiceSpec, self).__init__('nvmeof', service_id=service_id,
@@ -1762,7 +1764,8 @@ class NvmeofServiceSpec(ServiceSpec):
                                                 config=config, networks=networks,
                                                 extra_container_args=extra_container_args,
                                                 extra_entrypoint_args=extra_entrypoint_args,
-                                                custom_configs=custom_configs)
+                                                custom_configs=custom_configs,
+                                                targets=targets)
 
         #: RADOS pool where ceph-nvmeof config data is stored.
         self.pool = pool
@@ -2162,6 +2165,7 @@ class IscsiServiceSpec(ServiceSpec):
                  extra_container_args: Optional[GeneralArgList] = None,
                  extra_entrypoint_args: Optional[GeneralArgList] = None,
                  custom_configs: Optional[List[CustomConfig]] = None,
+                 targets: Optional[List[str]] = None,
                  ):
         assert service_type == 'iscsi'
         super(IscsiServiceSpec, self).__init__('iscsi', service_id=service_id,
@@ -2175,7 +2179,8 @@ class IscsiServiceSpec(ServiceSpec):
                                                config=config, networks=networks,
                                                extra_container_args=extra_container_args,
                                                extra_entrypoint_args=extra_entrypoint_args,
-                                               custom_configs=custom_configs)
+                                               custom_configs=custom_configs,
+                                               targets=targets)
 
         #: RADOS pool where ceph-iscsi config data is stored.
         self.pool = pool

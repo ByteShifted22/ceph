@@ -5691,7 +5691,7 @@ class TestMgmtGateway:
                                       ssl_cert=ceph_generated_cert,
                                       ssl_key=ceph_generated_key,
                                       scope="openid profile email",
-                                      email_domains=['domain.test'],
+                                      email_domains=['domain1.test','domain2.test','domain3.test'],
                                       allowlist_domains=[allowed_domain])
 
         whitelist_domains = f"{allowed_domain},1::4,ceph-node" if virtual_ip is None else f"{allowed_domain},{virtual_ip},1::4,ceph-node"

@@ -5748,7 +5748,7 @@ class TestMgmtGateway:
 
                                          # Secret value for encrypting cookies.
                                          cookie_secret= "kbAEM9opAmuHskQvt0AW8oeJRaOM2BYy5Loba0kZ0SQ="
-                                         email_domains= "domain.test"
+                                         email_domains= "domain1.test,domain2.test,domain3.test"
                                          whitelist_domains= "{whitelist_domains}\""""),
                     "oauth2-proxy.crt": f"{ceph_generated_cert}",
                     "oauth2-proxy.key": f"{ceph_generated_key}",

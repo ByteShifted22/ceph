@@ -65,11 +65,9 @@
         </div>
       </div>
       <div class="modal-footer">
-        <div class="text-right">
           <cd-form-button-panel (submitActionEvent)="onSubmit()"
                                 [form]="listenerForm"
                                 [submitText]="(action | titlecase) + ' ' + (resource | upperFirst)"></cd-form-button-panel>
-        </div>
       </div>
     </form>
   </ng-container>

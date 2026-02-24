@@ -137,7 +137,7 @@ void PrepareRemoteGroupRequest<I>::handle_get_mirror_info(int r) {
 
  if (m_mirror_group.state == cls::rbd::MIRROR_GROUP_STATE_DISABLING) {
     dout(10) << "remote group mirroring is being disabled" << dendl;
-    finish(-ERESTART);
+    finish(-ENOENT); // No group entry on remote, time to delete it locally.
     return;
   }
 

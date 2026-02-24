@@ -519,6 +519,7 @@ private:
 
   uint64_t blockdiff_min_file_size = 0;
   bool distribute_datasync_threads = true;
+  uint64_t datasync_files_per_batch = 64;
 
   ServiceDaemonStats m_service_daemon_stats;
 

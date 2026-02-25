@@ -9,7 +9,7 @@ from pg_autoscaler import module
 class RootMapItem:
 
     def __init__(self, pool_count, pg_target, pg_left):
-
+        self.delta = 0
         self.pool_count = pool_count
         self.pg_target = pg_target
         self.pg_left = pg_left
@@ -29,6 +29,7 @@ class TestPgAutoscaler(object):
         even_pools = {}
 
         # first pass
+        used_roots = set()
         for pool_name, p in pools.items():
             root_id = p['root_id']
             if root_id in overlapped_roots:
@@ -40,31 +41,35 @@ class TestPgAutoscaler(object):
                 p, pool_name, root_map,
                 p['root_id'], p['capacity_ratio'],
                 bias, even_pools, bulk_pools, 'first', p['bulk'])
-
+            used_roots.add(root_id)
             if final_ratio == None:
                 # no final_ratio means current pool is an even pool
                 # and we do not have to do any assertion on it.
                 continue
-
             assert p['expected_final_pg_target'] == final_pg_target
             assert p['expected_final_ratio'] == final_ratio
             assert not p['expected_bulk_pool'] and pool_name not in bulk_pools
-
+        for root_id in used_roots:
+            root_map[root_id].pg_left -= root_map[root_id].delta
+            root_map[root_id].delta = 0
         # second pass
+        used_roots = set()
         for pool_name, p in bulk_pools.items():
             final_ratio, pool_pg_target, final_pg_target = self.autoscaler._calc_final_pg_target(
                 p, pool_name, root_map,
                 p['root_id'], p['capacity_ratio'],
                 bias, even_pools, bulk_pools, 'second', p['bulk'])
-
+            used_roots.add(p['root_id'])
             if final_ratio == None:
                 # no final_ratio means current pool is an even pool
                 # and we do not have to do any assertion on it.
                 continue
-
             assert p['expected_final_pg_target'] == final_pg_target
             assert p['expected_final_ratio'] == final_ratio
             assert not p['even_pools'] and pool_name not in even_pools
+        for root_id in used_roots:
+            root_map[root_id].pg_left -= root_map[root_id].delta
+            root_map[root_id].delta = 0
 
         #third pass
         for pool_name, p in even_pools.items():
@@ -72,11 +77,9 @@ class TestPgAutoscaler(object):
                 p, pool_name, root_map,
                 p['root_id'], p['capacity_ratio'],
                 bias, even_pools, bulk_pools, 'third',  p['bulk'])
-
             assert p['expected_final_pg_target'] == final_pg_target
             assert p['expected_final_ratio'] == final_ratio
             assert p['even_pools'] and pool_name in even_pools
-
     def test_even_pools_one_meta_three_bulk(self):
         pools = {
 
@@ -673,4 +676,129 @@ class TestPgAutoscaler(object):
 
         bias = 1
         overlapped_roots = {0, 1}
+        self.helper_test(pools, root_map, bias, overlapped_roots)
+
+    def test_uneven_pools_with_same_root_id_and_capacity(self):
+        pools = {
+
+            "test0": {
+
+                "pool": 0,
+                "pool_name": "test0",
+                "pg_num_target": 32,
+                "capacity_ratio": 0.3333,
+                "root_id": 0,
+                "expected_final_pg_target": 512,
+                "expected_final_ratio": 0.3333,
+                "expected_bulk_pool": False,
+                "even_pools": False,
+                "size": 3,
+                "no_scale": False,
+                "bulk": False,
+            },
+
+            "test1": {
+
+                "pool": 1,
+                "pool_name": "test1",
+                "pg_num_target": 32,
+                "capacity_ratio": 0.3333,
+                "root_id": 0,
+                "expected_final_pg_target": 512,
+                "expected_final_ratio": 0.3333,
+                "expected_bulk_pool": False,
+                "even_pools": False,
+                "size": 3,
+                "no_scale": False,
+                "bulk": False,
+            },
+
+            "test2": {
+
+                "pool": 2,
+                "pool_name": "test2",
+                "pg_num_target": 32,
+                "capacity_ratio": 0.3333,
+                "root_id": 0,
+                "expected_final_pg_target": 512,
+                "expected_final_ratio": 0.3333,
+                "expected_bulk_pool": False,
+                "even_pools": False,
+                "size": 3,
+                "no_scale": False,
+                "bulk": False,
+            },
+
+        }
+        root_map = {
+
+            0: RootMapItem(3, 5000, 5000),
+
+        }
+
+        bias = 1
+        overlapped_roots = set()
+        self.helper_test(pools, root_map, bias, overlapped_roots)
+
+
+    def test_even_bulk_pools_with_same_root_id_and_capacity(self):
+        pools = {
+
+            "bulk0": {
+
+                "pool": 0,
+                "pool_name": "bulk0",
+                "pg_num_target": 32,
+                "capacity_ratio": 0.2,
+                "root_id": 0,
+                "expected_final_pg_target": 512,
+                "expected_final_ratio": 0.3333333333333333,
+                "expected_bulk_pool": True,
+                "even_pools": True,
+                "size": 3,
+                "no_scale": False,
+                "bulk": True,
+            },
+
+            "bulk1": {
+
+                "pool": 1,
+                "pool_name": "bulk1",
+                "pg_num_target": 32,
+                "capacity_ratio": 0.2,
+                "root_id": 0,
+                "expected_final_pg_target": 512,
+                "expected_final_ratio": 0.3333333333333333,
+                "expected_bulk_pool": True,
+                "even_pools": True,
+                "size": 3,
+                "no_scale": False,
+                "bulk": True,
+            },
+
+            "bulk2": {
+
+                "pool": 2,
+                "pool_name": "bulk2",
+                "pg_num_target": 32,
+                "capacity_ratio": 0.2,
+                "root_id": 0,
+                "expected_final_pg_target": 512,
+                "expected_final_ratio": 0.3333333333333333,
+                "expected_bulk_pool": True,
+                "even_pools": True,
+                "size": 3,
+                "no_scale": False,
+                "bulk": True,
+            },
+
+        }
+        root_map = {
+
+            0: RootMapItem(3, 5000, 5000),
+
+        }
+
+        bias = 1
+        overlapped_roots = set()
         self.helper_test(pools, root_map, bias, overlapped_roots)

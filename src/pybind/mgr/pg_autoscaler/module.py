@@ -99,6 +99,7 @@ class PgAdjustmentProgress(object):
 
 class CrushSubtreeResourceStatus:
     def __init__(self) -> None:
+        self.delta = 0
         self.root_ids: List[int] = []
         self.osds: Set[int] = set()
         self.osd_count: Optional[int] = None  # Number of OSDs
@@ -468,6 +469,7 @@ class PgAutoscaler(MgrModule):
         we calculate final_ratio by giving it 1 / pool_count
         of the root we are currently looking at.
         """
+        used_pg = 0
         if func_pass == 'first':
             # first pass to deal with small pools (no bulk flag)
             # calculating final_pg_target based on capacity ratio
@@ -477,9 +479,15 @@ class PgAutoscaler(MgrModule):
                 pg_left = root_map[root_id].pg_left
                 assert pg_left is not None
                 used_pg = final_ratio * pg_left
-                root_map[root_id].pg_left -= int(used_pg)
                 root_map[root_id].pool_used += 1
                 pool_pg_target = used_pg / p['size'] * bias
+                self.log.info("PASS={}, capacity_ratio ={}, pg_left={}, used_pg={}, pool_pg_target={}, delta={}".format(func_pass, 
+                    capacity_ratio, 
+                    pg_left, 
+                    int(used_pg), 
+                    pool_pg_target, 
+                    root_map[root_id].delta
+                ))
             else:
                 bulk_pools[pool_name] = p
                 return None, None, None
@@ -503,8 +511,14 @@ class PgAutoscaler(MgrModule):
             pg_left = root_map[root_id].pg_left
             assert pg_left is not None
             used_pg = final_ratio * pg_left
-            root_map[root_id].pg_left -= int(used_pg)
             pool_pg_target = used_pg / p['size'] * bias
+            self.log.info("PASS={}, capacity_ratio ={}, pg_left={}, used_pg={}, pool_pg_target={}, delta={}".format(func_pass, 
+                capacity_ratio, 
+                pg_left, 
+                int(used_pg), 
+                pool_pg_target, 
+                root_map[root_id].delta
+            ))
 
         else:
             # third pass we just split the pg_left to all even_pools
@@ -512,21 +526,31 @@ class PgAutoscaler(MgrModule):
             assert pool_count is not None
             final_ratio = 1 / (pool_count - root_map[root_id].pool_used)
             pool_pg_target = (final_ratio * root_map[root_id].pg_left) / p['size'] * bias
-
+            self.log.info("PASS={}, pool_count={}, pool_used={}, final_ratio={}, pg_left={}, pool_pg_target={}".format(
+                func_pass, 
+                pool_count, 
+                root_map[root_id].pool_used,
+                final_ratio,
+                root_map[root_id].pg_left,
+                pool_pg_target
+            )) 
         min_pg = p.get('options', {}).get('pg_num_min', PG_NUM_MIN)
         max_pg = p.get('options', {}).get('pg_num_max')
         final_pg_target = max(min_pg, nearest_power_of_two(pool_pg_target))
         if max_pg and max_pg < final_pg_target:
             final_pg_target = max_pg
+        root_map[root_id].delta += int(used_pg)
         self.log.info("Pool '{0}' root_id {1} using {2} of space, bias {3}, "
-                      "pg target {4} quantized to {5} (current {6})".format(
-                      p['pool_name'],
-                      root_id,
-                      capacity_ratio,
-                      bias,
-                      pool_pg_target,
-                      final_pg_target,
-                      p['pg_num_target']
+            "pg target {4} quantized to nearest power of two {5} (current {6}) (min_pg {7}) (max_pg {8})".format(
+            p['pool_name'],
+            root_id,
+            capacity_ratio,
+            bias,
+            pool_pg_target,
+            final_pg_target,
+            p['pg_num_target'],
+            min_pg,
+            max_pg
         ))
         return final_ratio, pool_pg_target, final_pg_target
 
@@ -562,6 +586,7 @@ class PgAutoscaler(MgrModule):
         """
         even_pools: Dict[str, Dict[str, Any]] = {}
         bulk_pools: Dict[str, Dict[str, Any]] = {}
+        used_roots: Set[int] = set()
         for pool_name, p in pools.items():
             pool_id = p['pool']
             if pool_id not in pool_stats:
@@ -612,7 +637,7 @@ class PgAutoscaler(MgrModule):
                                                   root_map[root_id].total_target_ratio,
                                                   root_map[root_id].total_target_bytes,
                                                   capacity)
-
+            self.log.info("Pool '{0}' pg_left {1}".format(pool_name, root_map[root_id].pg_left))
             # determine if the pool is a bulk
             bulk = False
             flags = p['flags_names'].split(",")
@@ -624,7 +649,7 @@ class PgAutoscaler(MgrModule):
                 p, pool_name, root_map, root_id,
                 capacity_ratio, bias, even_pools,
                 bulk_pools, func_pass, bulk)
-
+            used_roots.add(root_id)
             if final_ratio is None:
                 continue
 
@@ -674,7 +699,10 @@ class PgAutoscaler(MgrModule):
                 'bias': p.get('options', {}).get('pg_autoscale_bias', 1.0),
                 'bulk': bulk,
             })
-
+        for root_id in used_roots:
+            root_map[root_id].pg_left -= root_map[root_id].delta
+            self.log.info("pg_left for root {} after delta={} is {}".format(root_id, root_map[root_id].delta, root_map[root_id].pg_left))
+            root_map[root_id].delta = 0
         return ret, bulk_pools, even_pools
 
     def _get_pool_status(

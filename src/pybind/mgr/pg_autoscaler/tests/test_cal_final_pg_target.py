@@ -802,3 +802,109 @@ class TestPgAutoscaler(object):
         bias = 1
         overlapped_roots = set()
         self.helper_test(pools, root_map, bias, overlapped_roots)
+
+    def test_uneven_pools_quantize_overestimate(self):
+        pools = {
+
+
+            "test0": {
+
+
+                "pool": 0,
+                "pool_name": "test0",
+                "pg_num_target": 32,
+                "capacity_ratio": 0.62,
+                "root_id": 0,
+                "expected_final_pg_target": 4096,
+                "expected_final_ratio": 0.62,
+                "expected_bulk_pool": False,
+                "even_pools": False,
+                "size": 1,
+                "no_scale": False,
+                "bulk": False,
+            },
+
+
+            "test1": {
+
+
+                "pool": 1,
+                "pool_name": "test1",
+                "pg_num_target": 32,
+                "capacity_ratio": 0.2,
+                "root_id": 0,
+                "expected_final_pg_target": 904,
+                "expected_final_ratio": 0.2,
+                "expected_bulk_pool": False,
+                "even_pools": False,
+                "size": 1,
+                "no_scale": False,
+                "bulk": False,
+            },
+
+
+        }
+        root_map = {
+
+
+            0: RootMapItem(3, 5000, 5000),
+
+
+        }
+
+        bias = 1
+        overlapped_roots = set()
+        self.helper_test(pools, root_map, bias, overlapped_roots)
+
+    def test_uneven_pools_quantize_underestimate(self):
+        pools = {
+
+
+            "test0": {
+
+
+                "pool": 0,
+                "pool_name": "test0",
+                "pg_num_target": 32,
+                "capacity_ratio": 0.6,
+                "root_id": 0,
+                "expected_final_pg_target": 2048,
+                "expected_final_ratio": 0.6,
+                "expected_bulk_pool": False,
+                "even_pools": False,
+                "size": 1,
+                "no_scale": False,
+                "bulk": False,
+            },
+
+
+            "test1": {
+
+
+                "pool": 1,
+                "pool_name": "test1",
+                "pg_num_target": 32,
+                "capacity_ratio": 0.35,
+                "root_id": 0,
+                "expected_final_pg_target": 2048,
+                "expected_final_ratio": 0.35,
+                "expected_bulk_pool": False,
+                "even_pools": False,
+                "size": 1,
+                "no_scale": False,
+                "bulk": False,
+            },
+
+
+        }
+        root_map = {
+
+
+            0: RootMapItem(3, 5000, 5000),
+
+
+        }
+
+        bias = 1
+        overlapped_roots = set()
+        self.helper_test(pools, root_map, bias, overlapped_roots)

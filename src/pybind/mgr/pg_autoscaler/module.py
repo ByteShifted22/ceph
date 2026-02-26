@@ -469,7 +469,6 @@ class PgAutoscaler(MgrModule):
         we calculate final_ratio by giving it 1 / pool_count
         of the root we are currently looking at.
         """
-        used_pg = 0
         if func_pass == 'first':
             # first pass to deal with small pools (no bulk flag)
             # calculating final_pg_target based on capacity ratio
@@ -481,10 +480,9 @@ class PgAutoscaler(MgrModule):
                 used_pg = final_ratio * pg_left
                 root_map[root_id].pool_used += 1
                 pool_pg_target = used_pg / p['size'] * bias
-                self.log.info("PASS={}, capacity_ratio ={}, pg_left={}, used_pg={}, pool_pg_target={}, delta={}".format(func_pass, 
+                self.log.info("PASS={}, capacity_ratio ={}, pg_left={}, pool_pg_target={}, delta={}".format(func_pass, 
                     capacity_ratio, 
                     pg_left, 
-                    int(used_pg), 
                     pool_pg_target, 
                     root_map[root_id].delta
                 ))
@@ -512,12 +510,13 @@ class PgAutoscaler(MgrModule):
             assert pg_left is not None
             used_pg = final_ratio * pg_left
             pool_pg_target = used_pg / p['size'] * bias
-            self.log.info("PASS={}, capacity_ratio ={}, pg_left={}, used_pg={}, pool_pg_target={}, delta={}".format(func_pass, 
+            self.log.info("PASS={}, capacity_ratio={}, even_ratio={} pg_left={}, pool_pg_target={}, delta={}".format(
+                func_pass, 
                 capacity_ratio, 
+                even_ratio,
                 pg_left, 
-                int(used_pg), 
                 pool_pg_target, 
-                root_map[root_id].delta
+                root_map[root_id].delta,
             ))
 
         else:
@@ -532,16 +531,16 @@ class PgAutoscaler(MgrModule):
                 root_map[root_id].pool_used,
                 final_ratio,
                 root_map[root_id].pg_left,
-                pool_pg_target
+                pool_pg_target,
             )) 
         min_pg = p.get('options', {}).get('pg_num_min', PG_NUM_MIN)
         max_pg = p.get('options', {}).get('pg_num_max')
         final_pg_target = max(min_pg, nearest_power_of_two(pool_pg_target))
         if max_pg and max_pg < final_pg_target:
             final_pg_target = max_pg
-        root_map[root_id].delta += int(used_pg)
+        root_map[root_id].delta += final_pg_target * p['size']
         self.log.info("Pool '{0}' root_id {1} using {2} of space, bias {3}, "
-            "pg target {4} quantized to nearest power of two {5} (current {6}) (min_pg {7}) (max_pg {8})".format(
+            "pg target {4} quantized to nearest power of two {5} (current {6}) (min_pg {7}) (max_pg {8}) with delta {9}".format(
             p['pool_name'],
             root_id,
             capacity_ratio,
@@ -550,7 +549,8 @@ class PgAutoscaler(MgrModule):
             final_pg_target,
             p['pg_num_target'],
             min_pg,
-            max_pg
+            max_pg,
+            root_map[root_id].delta,
         ))
         return final_ratio, pool_pg_target, final_pg_target
 
@@ -637,7 +637,6 @@ class PgAutoscaler(MgrModule):
                                                   root_map[root_id].total_target_ratio,
                                                   root_map[root_id].total_target_bytes,
                                                   capacity)
-            self.log.info("Pool '{0}' pg_left {1}".format(pool_name, root_map[root_id].pg_left))
             # determine if the pool is a bulk
             bulk = False
             flags = p['flags_names'].split(",")

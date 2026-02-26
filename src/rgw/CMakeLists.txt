@@ -613,6 +613,7 @@ target_link_libraries(rgw
   ${rgw_libs}
   rgw_schedulers
   kmip
+  heap_profiler
   librados
   cls_rgw_client
   cls_otp_client

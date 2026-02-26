@@ -267,6 +267,15 @@
         <p
           class="overview-health-card-secondary-text cds--type-label-01"
           i18n>Ceph cannot reliably determine the current state of some data. Availability may be affected.</p>
+        <button
+          cdsButton="tertiary"
+          size="sm"
+          (click)="onViewPGStatesClick()">
+          <span
+            i18n
+            class="cds-ml-3">See all PGs states</span>
+          <cd-icon type="arrowUpRight"></cd-icon>
+        </button>
       </div>
     </ng-container>
     <ng-container *ngSwitchDefault></ng-container>

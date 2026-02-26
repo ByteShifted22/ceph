@@ -198,9 +198,9 @@ describe('OverviewComponent', () => {
   // -----------------------------
   it('should toggle panel open/close', () => {
     expect(component.isHealthPanelOpen).toBe(false);
-    component.togglePanel();
+    component.toggleHealthPanel();
     expect(component.isHealthPanelOpen).toBe(true);
-    component.togglePanel();
+    component.toggleHealthPanel();
     expect(component.isHealthPanelOpen).toBe(false);
   });
 

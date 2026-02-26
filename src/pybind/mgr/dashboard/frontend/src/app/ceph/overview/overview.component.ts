@@ -1,6 +1,12 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectionStrategy, Component, DestroyRef, inject } from '@angular/core';
-import { GridModule, TilesModule } from 'carbon-components-angular';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  inject,
+  ViewEncapsulation
+} from '@angular/core';
+import { GridModule, LayoutModule, TilesModule } from 'carbon-components-angular';
 import { EMPTY, Observable } from 'rxjs';
 import { catchError, exhaustMap, map, shareReplay } from 'rxjs/operators';
 
@@ -25,6 +31,7 @@ import { ComponentsModule } from '~/app/shared/components/components.module';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { OverviewAlertsCardComponent } from './alerts-card/overview-alerts-card.component';
 import { PerformanceCardComponent } from '~/app/shared/components/performance-card/performance-card.component';
+import { DataTableModule } from '~/app/shared/datatable/datatable.module';
 
 const sev = {
   ok: 0 as Severity,
@@ -33,6 +40,12 @@ const sev = {
 } as const;
 
 const maxSeverity = (...values: Severity[]): Severity => Math.max(...values) as Severity;
+
+const PGReadWrite = [
+  { label: $localize`Client write`, value: '10 MB/s' },
+  { label: $localize`Client read`, value: '120 MB/s' },
+  { label: $localize`Recovery I/O`, value: '120 MB/s' }
+];
 
 function buildHealthDisplay(status: HealthStatus): HealthDisplayVM {
   return HealthMap[status] ?? HealthMap['HEALTH_OK'];
@@ -125,16 +138,36 @@ export function buildHealthCardVM(d: HealthSnapshotMap): HealthCardVM {
     OverviewHealthCardComponent,
     ComponentsModule,
     OverviewAlertsCardComponent,
-    PerformanceCardComponent
+    PerformanceCardComponent,
+    LayoutModule,
+    DataTableModule
   ],
   standalone: true,
   templateUrl: './overview.component.html',
   styleUrl: './overview.component.scss',
-  changeDetection: ChangeDetectionStrategy.OnPush
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  encapsulation: ViewEncapsulation.None
 })
 export class OverviewComponent {
   isHealthPanelOpen = false;
+  isPGStatePanelOpen = true;
   activeHealthTab: HealthCardTabSection | null = null;
+  pgRW = PGReadWrite;
+  tableData = [
+    { count: '7245 (88.4%)', status: 'OK' },
+    { count: '7245 (88.4%)', status: 'OK' },
+    { count: '7245 (88.4%)', status: 'OK' },
+    { count: '7245 (88.4%)', status: 'OK' },
+    { count: '7245 (88.4%)', status: 'OK' },
+    { count: '7245 (88.4%)', status: 'OK' },
+    { count: '7245 (88.4%)', status: 'OK' },
+    { count: '7245 (88.4%)', status: 'OK' },
+    { count: '7245 (88.4%)', status: 'OK' }
+  ];
+  tableColumns = [
+    { prop: 'count', name: $localize`PGs count` },
+    { prop: 'status', name: $localize`Status` }
+  ];
 
   private readonly healthService = inject(HealthService);
   private readonly refreshIntervalService = inject(RefreshIntervalService);
@@ -164,7 +197,11 @@ export class OverviewComponent {
     );
   }
 
-  togglePanel(): void {
+  toggleHealthPanel(): void {
     this.isHealthPanelOpen = !this.isHealthPanelOpen;
+  }
+
+  togglePGStatesPanel(): void {
+    this.isPGStatePanelOpen = !this.isPGStatePanelOpen;
   }
 }

@@ -14,35 +14,87 @@
 
 #pragma once
 
+#include <functional>
+#include <vector>
 #include <map>
-#include <set>
-#include <optional>
 #include "osd/PGBackend.h"
+#include "osd/ECBackend.h"
+#include "osd/PGLog.h"
 #include "osd/OSDMap.h"
 #include "osd/osd_types.h"
-#include "osd/PGLog.h"
-#include "common/intrusive_timer.h"
-#include "common/ostream_temp.h"
-#include "global/global_context.h"
+#include "osd/osd_perf_counters.h"
+#include "common/ceph_context.h"
+#include "common/TrackedOp.h"
+#include "common/perf_counters.h"
+#include "messages/MOSDPGPush.h"
 #include "os/ObjectStore.h"
+#include "global/global_context.h"
+#include "test/osd/MockConnection.h"
+#include "test/osd/EventLoop.h"
+#include "osd/OpRequest.h"
 
-// MockPGBackendListener - simple stub for PGBackend::Listener
-class MockPGBackendListener : public PGBackend::Listener {
+// MockPGBackendListener - mock PGBackend::Listener and ECListener for multi-instance testing.
+class MockPGBackendListener : public PGBackend::Listener, public ECListener {
 public:
   pg_info_t info;
   OSDMapRef osdmap;
-  const pg_pool_t pool;
+  int64_t pool_id;
   PGLog log;
   DoutPrefixProvider *dpp;
   pg_shard_t pg_whoami;
+  pg_shard_t primary;  // The primary shard (typically shard 0)
   std::set<pg_shard_t> shardset;
+  shard_id_set acting_recovery_backfill_shard_id_set;
   std::map<pg_shard_t, pg_info_t> shard_info;
   std::map<pg_shard_t, pg_missing_t> shard_missing;
   std::map<hobject_t, std::set<pg_shard_t>> missing_loc_shards;
   pg_missing_tracker_t local_missing;
+  
+  std::vector<MessageRef> sent_messages;
+  std::vector<std::pair<int, MessageRef>> sent_messages_with_dest;
+  
+  ObjectStore *store = nullptr;
+  ObjectStore::CollectionHandle ch;
+  EventLoop *event_loop = nullptr;
+  std::function<bool(OpRequestRef)> handle_message_callback;
+  std::map<int, std::function<bool(OpRequestRef)>> *message_router = nullptr;
+  OpTracker *op_tracker = nullptr;
+  PerfCounters *perf_logger = nullptr;
 
-  MockPGBackendListener(OSDMapRef osdmap, const pg_pool_t pi, DoutPrefixProvider *dpp, pg_shard_t pg_whoami) :
-    osdmap(osdmap), pool(pi), log(g_ceph_context), dpp(dpp), pg_whoami(pg_whoami) {}
+  MockPGBackendListener(OSDMapRef osdmap, int64_t pool_id, DoutPrefixProvider *dpp, pg_shard_t pg_whoami, pg_shard_t primary = pg_shard_t(0, shard_id_t::NO_SHARD)) :
+    osdmap(osdmap), pool_id(pool_id), log(g_ceph_context), dpp(dpp), pg_whoami(pg_whoami), primary(primary) {
+    // Create a full OSD PerfCounters using the standard build_osd_logger function.
+    // This prevents null pointer dereferences when ReplicatedBackend calls get_logger()->inc().
+    perf_logger = build_osd_logger(g_ceph_context);
+  }
+  
+  ~MockPGBackendListener() {
+    if (perf_logger) {
+      delete perf_logger;
+      perf_logger = nullptr;
+    }
+  }
+  
+  void set_store(ObjectStore *s, ObjectStore::CollectionHandle c) {
+    store = s;
+    ch = c;
+  }
+  
+  void set_event_loop(EventLoop *loop) {
+    event_loop = loop;
+  }
+  
+  void set_op_tracker(OpTracker *tracker) {
+    op_tracker = tracker;
+  }
+  
+  void set_handle_message_callback(std::function<bool(OpRequestRef)> cb) {
+    handle_message_callback = cb;
+  }
+  
+  void set_message_router(std::map<int, std::function<bool(OpRequestRef)>> *router) {
+    message_router = router;
+  }
 
   // Debugging
   DoutPrefixProvider *get_dpp() override {
@@ -116,18 +168,80 @@ public:
     return c;
   }
 
-  // Messaging
+  // Routes messages through EventLoop for asynchronous EC message processing.
   void send_message(int to_osd, Message *m) override {
+    MessageRef mref(m);
+    sent_messages.push_back(mref);
+    sent_messages_with_dest.push_back({to_osd, mref});
+    
+    if (event_loop && op_tracker && message_router) {
+      // Capture the sender's OSD ID
+      int from_osd = pg_whoami.osd;
+      
+      // IMPORTANT: Encode the message payload to simulate network transmission
+      // This ensures that txn_payload is moved to the middle section for MOSDRepOp messages
+      // Without this, Transaction::decode will fail because the message structure is incomplete
+      mref->encode_payload(CEPH_FEATURES_ALL);
+      
+      event_loop->schedule_osd_message(to_osd, [this, mref, to_osd, from_osd]() {
+        if (!mref->get_connection()) {
+          // Set connection peer to the SENDER, not the destination
+          ConnectionRef conn = new MockConnection(from_osd);
+          mref->set_connection(conn);
+        }
+        OpRequestRef op = op_tracker->create_request<OpRequest>(mref.get());
+        
+        // Route to the correct shard's backend using the message router
+        auto it = message_router->find(to_osd);
+        if (it != message_router->end()) {
+          it->second(op);
+        }
+      });
+    }
   }
 
   void queue_transaction(
     ObjectStore::Transaction&& t,
     OpRequestRef op = OpRequestRef()) override {
+    std::vector<ObjectStore::Transaction> tls;
+    tls.push_back(std::move(t));
+    queue_transactions(tls, op);
   }
 
   void queue_transactions(
     std::vector<ObjectStore::Transaction>& tls,
     OpRequestRef op = OpRequestRef()) override {
+    if (event_loop && store && ch) {
+      // Steal the Context callbacks from the transactions before calling MemStore.
+      // This allows the test harness to manage the context callbacks itself instead of using
+      // a Finisher thread. This keeps the test harness single threaded and gives more
+      // control for ordering async replies.
+      Context *on_apply = nullptr;
+      Context *on_apply_sync = nullptr;
+      Context *on_commit = nullptr;
+      ObjectStore::Transaction::collect_contexts(tls, &on_apply, &on_commit, &on_apply_sync);
+
+      // Execute transactions through the store (without contexts - we stole them)
+      store->queue_transactions(ch, tls, TrackedOpRef(), nullptr);
+
+      // Apply the on_apply_sync synchronously. This is what queue_transactions
+      // would do anyway.
+      // NOTE: Memstore will panic rather than fail
+      if (on_apply_sync) {
+        on_apply_sync->complete(0);
+      }
+
+      if (on_apply) {
+        event_loop->schedule_transaction(pg_whoami.osd, [on_apply]() mutable {
+          on_apply->complete(0);
+        });
+      }
+      if (on_commit) {
+        event_loop->schedule_transaction(pg_whoami.osd, [on_commit]() mutable {
+          on_commit->complete(0);
+        });
+      }
+    }
   }
 
   epoch_t get_interval_start_epoch() const override {
@@ -141,6 +255,10 @@ public:
   // Shard information
   const std::set<pg_shard_t> &get_acting_recovery_backfill_shards() const override {
     return shardset;
+  }
+
+  const shard_id_set &get_acting_recovery_backfill_shard_id_set() const {
+    return acting_recovery_backfill_shard_id_set;
   }
 
   const std::set<pg_shard_t> &get_acting_shards() const override {
@@ -183,7 +301,7 @@ public:
   }
 
   bool pgb_is_primary() const override {
-    return true;
+    return pg_whoami == primary;
   }
 
   const OSDMapRef& pgb_get_osdmap() const override {
@@ -199,7 +317,9 @@ public:
   }
 
   const pg_pool_t &get_pool() const override {
-    return pool;
+    const pg_pool_t *p = osdmap->get_pg_pool(pool_id);
+    ceph_assert(p != nullptr);
+    return *p;
   }
 
   eversion_t get_pg_committed_to() const override {
@@ -302,7 +422,7 @@ public:
   }
 
   pg_shard_t primary_shard() const override {
-    return pg_shard_t();
+    return primary;
   }
 
   uint64_t min_peer_features() const override {
@@ -325,16 +445,24 @@ public:
 
   void send_message_osd_cluster(
     int peer, Message *m, epoch_t from_epoch) override {
+    send_message(peer, m);
   }
 
   void send_message_osd_cluster(
     std::vector<std::pair<int, Message*>>& messages, epoch_t from_epoch) override {
+    for (auto& [osd, m] : messages) {
+      send_message(osd, m);
+    }
   }
 
-  void send_message_osd_cluster(MessageRef, Connection *con) override {
+  void send_message_osd_cluster(MessageRef m, Connection *con) override {
+    MockConnection* mock_con = dynamic_cast<MockConnection*>(con);
+    send_message(mock_con->get_peer_osd(), m.get());
   }
 
   void send_message_osd_cluster(Message *m, const ConnectionRef& con) override {
+    MockConnection* mock_con = dynamic_cast<MockConnection*>(con.get());
+    send_message(mock_con->get_peer_osd(), m);
   }
 
   void start_mon_command(
@@ -352,7 +480,7 @@ public:
   }
 
   PerfCounters *get_logger() override {
-    return nullptr;
+    return perf_logger;
   }
 
   ceph_tid_t get_tid() override {
@@ -393,9 +521,35 @@ public:
   bool maybe_preempt_replica_scrub(const hobject_t& oid) override {
     return false;
   }
+  void add_temp_obj(const hobject_t &oid) override {
+  }
+
+  void clear_temp_obj(const hobject_t &oid) override {
+  }
+
+  const pg_missing_const_i * maybe_get_shard_missing(
+    pg_shard_t peer) const override {
+    return &local_missing;
+  }
+
+  const pg_info_t &get_shard_info(pg_shard_t peer) const override {
+    auto it = shard_info.find(peer);
+    if (it != shard_info.end()) {
+      return it->second;
+    }
+    return info;
+  }
+
+  bool is_missing_object(const hobject_t& oid) const override {
+    return false;
+  }
+  void send_message_osd_cluster(
+    int osd, MOSDPGPush* msg, epoch_t from_epoch) override {
+    send_message(osd, msg);
+  }
 
   struct ECListener *get_eclistener() override {
-    return nullptr;
+    return this;
   }
 };
 

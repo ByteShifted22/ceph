@@ -1,38 +1,49 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:nil -*-
-// vim: ts=8 sw=2 sts=2 expandtab
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
 
-#ifndef CEPH_LIBRBD_MIRROR_GROUP_ENABLE_REQUEST_H
-#define CEPH_LIBRBD_MIRROR_GROUP_ENABLE_REQUEST_H
+#ifndef CEPH_LIBRBD_MIRROR_GROUP_ADD_IMAGE_REQUEST_H
+#define CEPH_LIBRBD_MIRROR_GROUP_ADD_IMAGE_REQUEST_H
 
 #include "librbd/mirror/snapshot/GroupPrepareImagesRequest.h"
 #include "include/rados/librados_fwd.hpp"
 #include "cls/rbd/cls_rbd_types.h"
+
 #include <string>
+#include <vector>
+#include <set>
 
 class Context;
 
 namespace librbd {
 
+class ImageCtx;
 namespace asio { struct ContextWQ; }
 
 namespace mirror {
 
 template <typename ImageCtxT = ImageCtx>
-class GroupEnableRequest {
+class GroupAddImageRequest {
 public:
-  static GroupEnableRequest *create(librados::IoCtx &group_io_ctx,
-                                    const std::string &group_id,
-                                    uint64_t group_snap_create_flags,
-                                    cls::rbd::MirrorImageMode mode,
-                                    Context *on_finish) {
-    return new GroupEnableRequest(group_io_ctx, group_id,
-                                  group_snap_create_flags, mode, on_finish);
+  static GroupAddImageRequest *create(librados::IoCtx &group_io_ctx,
+                                      const std::string &group_id,
+                                      const std::string &image_id,
+                                      uint64_t group_snap_create_flags,
+                                      cls::rbd::MirrorImageMode mode,
+                                      Context *on_finish) {
+    return new GroupAddImageRequest(group_io_ctx, group_id, image_id,
+                                    group_snap_create_flags, mode, on_finish);
   }
 
   void send();
 
 private:
   /**
+   * Adds an image to an enabled mirror group.
+   *
+   * ImageCtx ownership is transferred to
+   * GroupMirrorEnableUpdateRequest once started.
+   * This request only closes images if preparation fails.
+   *
    * @verbatim
    *
    * <start>
@@ -44,7 +55,7 @@ private:
    * PREPARE_GROUP_IMAGES  * * * * * * * * *
    *    |                                  *
    *    v                                  *
-   * GROUP_MIRROR_ENABLE_UPDATE  * * * * * *
+   * GROUP_MIRROR_ADD_IMAGE_UPDATE * * * * *
    *    |                                  *
    *    v                                  *
    * CLOSE_IMAGE < * * * * * * * * * * * * *
@@ -55,12 +66,14 @@ private:
    * @endverbatim
    */
 
-  GroupEnableRequest(librados::IoCtx &io_ctx, const std::string &group_id,
-                     uint64_t group_snap_create_flags,
-                     cls::rbd::MirrorImageMode mode, Context *on_finish);
+  GroupAddImageRequest(librados::IoCtx &io_ctx, const std::string &group_id,
+                       const std::string &image_id,
+                       uint64_t group_snap_create_flags,
+                       cls::rbd::MirrorImageMode mode, Context *on_finish);
 
   librados::IoCtx &m_group_ioctx;
   const std::string m_group_id;
+  const std::string m_image_id;
   uint64_t m_group_snap_create_flags;
   const cls::rbd::MirrorImageMode m_mode;
   Context *m_on_finish;
@@ -72,7 +85,7 @@ private:
   int m_ret_val = 0;
 
   std::vector<ImageCtxT *> m_image_ctxs;
-
+  std::vector<cls::rbd::MirrorImage> m_mirror_images;
   std::set<std::string> m_mirror_peer_uuids;
   std::vector<cls::rbd::GroupImageStatus> m_images;
 
@@ -84,8 +97,8 @@ private:
   void prepare_group_images();
   void handle_prepare_group_images(int r);
 
-  void group_mirror_enable_update();
-  void handle_group_mirror_enable_update(int r);
+  void group_mirror_add_image_update();
+  void handle_group_mirror_add_image_update(int r);
 
   void close_images();
   void handle_close_images(int r);
@@ -96,6 +109,6 @@ private:
 } // namespace mirror
 } // namespace librbd
 
-extern template class librbd::mirror::GroupEnableRequest<librbd::ImageCtx>;
+extern template class librbd::mirror::GroupAddImageRequest<librbd::ImageCtx>;
 
-#endif // CEPH_LIBRBD_MIRROR_GROUP_ENABLE_REQUEST_H
+#endif // CEPH_LIBRBD_MIRROR_GROUP_ADD_IMAGE_REQUEST_H

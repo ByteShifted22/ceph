@@ -990,12 +990,16 @@ public:
       int store_oidc_provider(const DoutPrefixProvider *dpp,
                               optional_yield y,
                               const RGWOIDCProviderInfo& info,
-                              bool exclusive) override;
+                              bool exclusive,
+                              RGWObjVersionTracker* objv_tracker =
+                                  nullptr) override;
       int load_oidc_provider(const DoutPrefixProvider *dpp,
                              optional_yield y,
                              std::string_view tenant,
                              std::string_view url,
-                             RGWOIDCProviderInfo& info) override;
+                             RGWOIDCProviderInfo& info,
+                             RGWObjVersionTracker* objv_tracker =
+                                 nullptr) override;
       int delete_oidc_provider(const DoutPrefixProvider *dpp,
                                optional_yield y,
                                std::string_view tenant,

@@ -59,6 +59,7 @@ class CephFSMirror(Task):
 
         self.ctx.daemons.add_daemon(
             self.remote, 'cephfs-mirror', self.client,
+            cluster=self.cluster_name,
             args=args,
             logger=self.log.getChild(self.client),
             stdin=run.PIPE,

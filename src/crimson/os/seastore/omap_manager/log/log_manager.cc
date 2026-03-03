@@ -97,6 +97,10 @@ LogManager::omap_set_keys(
       co_return;
     }
     co_await _log_set_key(log_root, t, log_node, k, v, can_ow);
+    if (log_root.must_update()) {
+      ext = co_await log_load_extent<LogNode>(
+	t, log_root.addr, BEGIN_KEY, END_KEY);
+    }
     co_return;
   };
   /*

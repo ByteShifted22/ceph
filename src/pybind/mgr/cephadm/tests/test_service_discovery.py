@@ -1,4 +1,5 @@
 from unittest.mock import MagicMock
+from typing import List
 from cephadm.services.service_discovery import Root
 from cephadm.services.service_registry import service_registry
 
@@ -143,7 +144,7 @@ class TestServiceDiscovery:
 
     def test_get_sd_config_prometheus(self):
         mgr = FakeMgr()
-        root = Root(mgr)
+        root = Root(mgr, 5000, '0.0.0.0')
         cfg = root.get_sd_config('mgr-prometheus')
 
         # check response structure
@@ -152,12 +153,31 @@ class TestServiceDiscovery:
             assert 'labels' in entry
             assert 'targets' in entry
 
-        # check content
-        assert cfg[0]['targets'] == ['node0:9283']
+        # check content - should return IP address instead of hostname
+        assert cfg[0]['targets'] == ['1.2.3.4:9283']
+
+    def test_get_sd_config_prometheus_uses_ip_when_hostname_unresolvable(self, monkeypatch):
+        mgr = FakeMgr()
+
+        def _mgr_daemons_no_ip(service_type: str) -> List[FakeDaemonDescription]:
+            if service_type == 'mgr':
+                return [
+                    FakeDaemonDescription(None, [9922], 'node0', daemon_type='mgr', daemon_id='fake_active_mgr'),
+                    FakeDaemonDescription('1.2.3.5', [9922], 'node1', daemon_type='mgr', daemon_id='fake_standby_mgr'),
+                ]
+            return FakeCache().get_daemons_by_service(service_type)
+
+        monkeypatch.setattr(mgr.cache, 'get_daemons_by_service', _mgr_daemons_no_ip)
+
+        root = Root(mgr, 5000, '0.0.0.0')
+        cfg = root.get_sd_config('mgr-prometheus')
+
+        # Expect fallback to inventory IP (FakeInventory returns 1.2.3.4)
+        assert cfg == [{"targets": ["1.2.3.4:9283"], "labels": {}}]
 
     def test_get_sd_config_node_exporter(self):
         mgr = FakeMgr()
-        root = Root(mgr)
+        root = Root(mgr, 5000, '0.0.0.0')
         cfg = root.get_sd_config('node-exporter')
 
         # check response structure
@@ -174,7 +194,7 @@ class TestServiceDiscovery:
 
     def test_get_sd_config_alertmgr(self):
         mgr = FakeMgr()
-        root = Root(mgr)
+        root = Root(mgr, 5000, '0.0.0.0')
         cfg = root.get_sd_config('alertmanager')
 
         # check response structure
@@ -188,7 +208,7 @@ class TestServiceDiscovery:
 
     def test_get_sd_config_haproxy(self):
         mgr = FakeMgr()
-        root = Root(mgr)
+        root = Root(mgr, 5000, '0.0.0.0')
         cfg = root.get_sd_config('haproxy')
 
         # check response structure
@@ -204,7 +224,7 @@ class TestServiceDiscovery:
 
     def test_get_sd_config_ceph_exporter(self):
         mgr = FakeMgr()
-        root = Root(mgr)
+        root = Root(mgr, 5000, '0.0.0.0')
         cfg = root.get_sd_config('ceph-exporter')
 
         # check response structure
@@ -218,7 +238,7 @@ class TestServiceDiscovery:
 
     def test_get_sd_config_nvmeof(self):
         mgr = FakeMgr()
-        root = Root(mgr)
+        root = Root(mgr, 5000, '0.0.0.0')
         cfg = root.get_sd_config('nvmeof')
 
         # check response structure
@@ -232,7 +252,7 @@ class TestServiceDiscovery:
 
     def test_get_sd_config_nfs(self):
         mgr = FakeMgr()
-        root = Root(mgr)
+        root = Root(mgr, 5000, '0.0.0.0')
         cfg = root.get_sd_config('nfs')
 
         # check response structure
@@ -246,7 +266,7 @@ class TestServiceDiscovery:
 
     def test_get_sd_config_smb(self):
         mgr = FakeMgr()
-        root = Root(mgr)
+        root = Root(mgr, 5000, '0.0.0.0')
         cfg = root.get_sd_config('smb')
 
         # check response structure
@@ -260,7 +280,7 @@ class TestServiceDiscovery:
 
     def test_get_sd_config_custom_container(self):
         mgr = FakeMgr()
-        root = Root(mgr)
+        root = Root(mgr, 5000, '0.0.0.0')
         cfg = root.get_sd_config('container.custom-container')
 
         # check response structure
@@ -274,6 +294,6 @@ class TestServiceDiscovery:
 
     def test_get_sd_config_invalid_service(self):
         mgr = FakeMgr()
-        root = Root(mgr)
+        root = Root(mgr, 5000, '0.0.0.0')
         cfg = root.get_sd_config('invalid-service')
         assert cfg == []

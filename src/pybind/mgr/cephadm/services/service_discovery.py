@@ -169,11 +169,13 @@ class Root:
         """
         targets = []
         mgr_daemons = self.mgr.cache.get_daemons_by_service('mgr')
-        host = service_registry.get_service('mgr').get_active_daemon(mgr_daemons).hostname or ''
-        fqdn = self.mgr.get_fqdn(host)
-        port = self.mgr.get_module_option_ex(
-            'prometheus', 'server_port', PrometheusService.DEFAULT_MGR_PROMETHEUS_PORT)
-        targets.append(f'{fqdn}:{port}')
+        dd = service_registry.get_service('mgr').get_active_daemon(mgr_daemons)
+        if dd:
+            assert dd.hostname is not None
+            addr = dd.ip if dd.ip else self.mgr.inventory.get_addr(dd.hostname)
+            port = self.mgr.get_module_option_ex(
+                'prometheus', 'server_port', PrometheusService.DEFAULT_MGR_PROMETHEUS_PORT)
+            targets.append(build_url(host=addr, port=port).lstrip('/'))
         return [{"targets": targets, "labels": {}}]
 
     def alertmgr_sd_config(self) -> List[Dict[str, Collection[str]]]:

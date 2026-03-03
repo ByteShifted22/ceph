@@ -47,3 +47,15 @@ DEFAULT_PORTS = {
     CTDB: CTDB_PORT,
     REMOTE_CONTROL: REMOTE_CONTROL_PORT,
 }
+
+# Maximum value for iops_limit
+IOPS_LIMIT_MAX = 1_000_000
+
+# Maximum value for bandwidth limit (1 << 40 = 1 TB)
+BYTES_LIMIT_MAX = 1 << 40
+
+# Minimum value for burst multiplier
+BURST_MULT_MIN = 10
+
+# Maximum value for burst multiplier
+BURST_MULT_MAX = 100

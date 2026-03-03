@@ -1,6 +1,12 @@
 ---
 name: "Check for Incompatible Licenses"
-on: [pull_request]
+on:
+  pull_request:
+    paths-ignore:
+      - 'doc/**'
+      - 'man/**'
+      - 'qa/**'
+      - '.github/**'
 
 jobs:
   pull_request:

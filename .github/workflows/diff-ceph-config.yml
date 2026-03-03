@@ -8,6 +8,11 @@ on:
       - synchronize
       - edited
       - reopened
+    paths-ignore:
+      - 'doc/**'
+      - 'man/**'
+      - 'qa/**'
+      - '.github/**'
 permissions:
   issues: write
   contents: read

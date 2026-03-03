@@ -45,7 +45,7 @@
   <p class="cds--type-heading-05 cds-mb-0"
      [ngClass]="colorClass">
     {{vm?.clusterHealth?.title}}
-    <cd-icon [type]="colorClass"></cd-icon>
+    <cd-icon [type]="vm?.clusterHealth?.icon"></cd-icon>
   </p>
   <p class="cds--type-label-01 overview-health-card-secondary-text">{{vm?.clusterHealth?.message}}</p>
   } @else {

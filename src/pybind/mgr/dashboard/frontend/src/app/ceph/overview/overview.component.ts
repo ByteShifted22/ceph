@@ -144,7 +144,7 @@ export class OverviewComponent {
 
   private readonly healthData$: Observable<HealthSnapshotMap> = this.refreshIntervalObs(() =>
     this.healthService.getHealthSnapshot()
-  );
+  ).pipe(shareReplay({ bufferSize: 1, refCount: true }));
 
   readonly healthCardVm$: Observable<HealthCardVM> = this.healthData$.pipe(
     map(buildHealthCardVM),

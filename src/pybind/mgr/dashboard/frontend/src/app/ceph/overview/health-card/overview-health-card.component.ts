@@ -85,9 +85,10 @@ export class OverviewHealthCardComponent {
 
   @Input({ required: true }) vm!: HealthCardVM;
   @Output() viewIncidents = new EventEmitter<void>();
+  @Output() viewPGStates = new EventEmitter<void>();
   @Output() activeSectionChange = new EventEmitter<HealthCardTabSection | null>();
 
-  activeSection: HealthCardTabSection | null = null;
+  activeSection: HealthCardTabSection | null = 'resiliency';
 
   healthItems: HealthItemConfig[] = [
     { key: 'mon', label: $localize`Monitor` },
@@ -101,6 +102,14 @@ export class OverviewHealthCardComponent {
     this.activeSectionChange.emit(this.activeSection);
   }
 
+  onViewIncidentsClick() {
+    this.viewIncidents.emit();
+  }
+
+  onViewPGStatesClick() {
+    this.viewPGStates.emit();
+  }
+
   readonly data$: Observable<OverviewHealthData> = combineLatest([
     this.summaryService.summaryData$.pipe(filter((summary): summary is Summary => !!summary)),
     this.upgradeService.listCached().pipe(
@@ -108,10 +117,6 @@ export class OverviewHealthCardComponent {
       catchError(() => of(null))
     )
   ]).pipe(map(([summary, upgrade]) => ({ summary, upgrade })));
-
-  onViewIncidentsClick() {
-    this.viewIncidents.emit();
-  }
 
   private readonly permissions = this.authStorageService.getPermissions();
 

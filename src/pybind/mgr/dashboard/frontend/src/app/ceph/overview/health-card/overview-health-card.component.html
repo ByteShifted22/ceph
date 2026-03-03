@@ -2,7 +2,7 @@
 @let hwEnabled = (enabled$ | async);
 @let hwSections = (sections$ | async);
 
-@let colorClass="overview-health-card-status--" + vm?.health?.icon;
+@let colorClass="overview-health-card-status--" + vm?.clusterHealth?.icon;
 
 
 <cd-productive-card class="overview-health-card">
@@ -41,13 +41,13 @@
     [minLineWidth]="400"></cds-skeleton-text>
   }
   <!------------------------- HEALTH CARD CLUSTER STATUS ------------------>
-  @if(vm?.health){
+  @if(vm?.clusterHealth){
   <p class="cds--type-heading-05 cds-mb-0"
      [ngClass]="colorClass">
-    {{vm?.health?.title}}
-    <cd-icon [type]="vm?.health?.icon"></cd-icon>
+    {{vm?.clusterHealth?.title}}
+    <cd-icon [type]="vm?.clusterHealth?.icon"></cd-icon>
   </p>
-  <p class="cds--type-label-01 overview-health-card-secondary-text">{{vm?.health?.message}}</p>
+  <p class="cds--type-label-01 overview-health-card-secondary-text">{{vm?.clusterHealth?.message}}</p>
   } @else {
   <cds-skeleton-placeholder></cds-skeleton-placeholder>
   }
@@ -158,6 +158,32 @@
       </cds-tooltip-definition>
     </div>
   }
+  <!-- RESILIENCY TAB -->
+   @if(vm?.overallSystemSev) {
+    <div class="overview-health-card-tab"
+         [class.overview-health-card-tab-selected]="activeSection === 'resiliency'">
+      <div class="cds-mb-1"><cd-icon
+        [type]="vm?.resiliencyHealth?.icon"></cd-icon></div>
+      <cds-tooltip-definition
+        [highContrast]="true"
+        [openOnHover]="true"
+        [dropShadow]="true"
+        class="cds-ml-2"
+        [caret]="true"
+        (click)="toggleSection('resiliency')"
+        description=""
+        i18n-description>
+        <span
+          class="cds-mr-1"
+          [class.cds--type-heading-compact-01]="activeSection === 'resiliency'"
+          i18n>
+          Data resiliency
+        </span>
+      </cds-tooltip-definition>
+    </div>
+  } @else {
+  <cds-skeleton-text [lines]="1"></cds-skeleton-text>
+  }
   </div>
 
   <!-- TAB CONTENT -->
@@ -229,7 +255,28 @@
         }
       </div>
     </ng-container>
-
+    <!-- RESILIENCY TAB CONTENT -->
+    <ng-container *ngSwitchCase="'resiliency'">
+      <div class="overview-health-card-tab-content">
+        <span class="overview-health-card-icon-and-text">
+          <cd-icon [type]="vm?.resiliencyHealth?.icon"></cd-icon>
+          <span class="cds--type-body-compact-01">
+            {{vm?.resiliencyHealth?.title}}
+          </span>
+        </span>
+        <p class="overview-health-card-secondary-text cds--type-label-01">
+          {{vm?.resiliencyHealth?.description}}</p>
+        <button
+          cdsButton="tertiary"
+          size="sm"
+          (click)="onViewPGStatesClick()">
+          <span
+            i18n
+            class="cds-ml-3">See all PGs states</span>
+          <cd-icon type="arrowUpRight"></cd-icon>
+        </button>
+      </div>
+    </ng-container>
     <ng-container *ngSwitchDefault></ng-container>
   </div>
 </cd-productive-card>

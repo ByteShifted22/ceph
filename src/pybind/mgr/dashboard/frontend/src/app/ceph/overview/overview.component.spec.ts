@@ -114,7 +114,7 @@ describe('OverviewComponent', () => {
       );
       expect(vm.checks[0].icon).toEqual(expect.any(String));
 
-      expect(vm.health).toEqual(HealthMap['HEALTH_OK']);
+      expect(vm.clusterHealth).toEqual(HealthMap['HEALTH_OK']);
 
       expect(vm.mon).toEqual(
         expect.objectContaining({

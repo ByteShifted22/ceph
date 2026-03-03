@@ -66,7 +66,7 @@
 }
 @if (isPGStatePanelOpen) {
   <cd-side-panel
-    [headerText]="'Placement groups  ('+ '8192' +')'"
+    [headerText]="'Placement groups  ('+ health?.pgs?.total +')'"
     [expanded]="isPGStatePanelOpen"
     size="md"
     (closed)="togglePGStatesPanel()">
@@ -81,7 +81,7 @@
         class="overview-pg-side-panel-rw cds-mb-4"
         cdsStack="horizontal"
         gap="4">
-        @for (data of pgRW; track $index ; let isLast = $last ; let isFirst = $first) {
+        @for (data of health?.pgs?.io; track $index ; let isLast = $last) {
         <div
           class="overview-pg-side-panel-rw-item"
           [class.overview-pg-side-panel-rw-item--border]="!isLast">
@@ -91,8 +91,9 @@
         }
       </div>
       <cd-table
-         [data]="tableData"
-         [columns]="tableColumns">
+         [data]="health?.pgs?.states"
+         [columns]="tableColumns"
+         size="xs">
       </cd-table>
     </div>
   </cd-side-panel>

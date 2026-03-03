@@ -44,9 +44,15 @@ def run_in_keystone_venv(ctx, client, args, **kwargs):
                             run.Raw('&&')
                         ] + args, **kwargs)
 
-def get_keystone_venved_cmd(ctx, cmd, args, env=[]):
-    kbindir = get_keystone_dir(ctx) + '/.tox/venv/bin/'
-    return env + [ kbindir + 'python', kbindir + cmd ] + args
+def get_keystone_uwsgi_cmd(ctx, conf_file, port):
+    kdir = get_keystone_dir(ctx)
+    uwsgibin = f'{kdir}/.tox/venv/bin/uwsgi'
+    conf_env = f'OS_KEYSTONE_CONFIG_FILES={conf_file}'
+    cmd = [uwsgibin, '--env', conf_env, '--uwsgi-socket', f':{port}',
+           '--buffer-size', '65535', '--master', '--enable-threads',
+           '--processes', '4', '--thunder-lock',
+           '--lazy-apps', '--module', 'keystone.wsgi.api:application']
+    return cmd
 
 @contextlib.contextmanager
 def download(ctx, config):
@@ -196,8 +202,8 @@ def setup_venv(ctx, config):
 
         run_in_keystone_venv(ctx, client,
             [   'pip', 'install',
-                'python-openstackclient==5.2.1',
-                'osc-lib==2.0.0'
+                'python-openstackclient',
+                'uwsgi',
              ])
     try:
         yield
@@ -277,19 +283,7 @@ def run_keystone(ctx, config):
         client_public_with_id = 'keystone.public' + '.' + client_id
 
         public_host, public_port = ctx.keystone.public_endpoints[client]
-        run_cmd = get_keystone_venved_cmd(ctx, 'keystone-wsgi-public',
-            [   '--host', public_host, '--port', str(public_port),
-                # Let's put the Keystone in background, wait for EOF
-                # and after receiving it, send SIGTERM to the daemon.
-                # This crazy hack is because Keystone, in contrast to
-                # our other daemons, doesn't quit on stdin.close().
-                # Teuthology relies on this behaviour.
-		run.Raw('& { read; kill %1; }')
-            ],
-            [
-                run.Raw('OS_KEYSTONE_CONFIG_FILES={}'.format(conf_file)),
-            ],
-        )
+        run_cmd = get_keystone_uwsgi_cmd(ctx, conf_file, public_port)
         ctx.daemons.add_daemon(
             remote, 'keystone', client_public_with_id,
             cluster=cluster_name,

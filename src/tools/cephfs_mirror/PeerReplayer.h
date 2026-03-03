@@ -227,6 +227,9 @@ private:
     bool pop_dataq_entry(PeerReplayer::SyncEntry &out);
     bool has_pending_work() const;
     void mark_crawl_finished(int ret);
+    bool is_dataq_empty_unlocked() {
+      return m_sync_dataq.empty();
+    }
     bool get_crawl_finished_unlocked() {
       return m_crawl_finished;
     }
@@ -515,6 +518,8 @@ private:
   std::deque<std::shared_ptr<SyncMechanism>> syncm_q;
 
   uint64_t blockdiff_min_file_size = 0;
+  bool distribute_datasync_threads = true;
+  uint64_t datasync_files_per_batch = 64;
 
   ServiceDaemonStats m_service_daemon_stats;
 
@@ -581,6 +586,10 @@ private:
   ceph::mutex& get_smq_lock() {
     return smq_lock;
   }
+  int get_num_queued_snapshots_unlocked() {
+    return syncm_q.size();
+  }
+  void set_changed_mirroring_configurations();
 };
 
 } // namespace mirror

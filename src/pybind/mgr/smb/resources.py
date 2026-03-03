@@ -14,6 +14,7 @@ from ceph.deployment.service_spec import (
     SMBClusterPublicIPSpec,
     SpecValidationError,
 )
+from ceph.smb.constants import REMOTE_CONTROL, REMOTE_CONTROL_LOCAL
 from ceph.smb.network import to_network
 from object_format import ErrorResponseBase
 
@@ -604,6 +605,9 @@ class ExternalCephClusterSource(_RBase):
 class RemoteControl(_RBase):
     # enabled can be set to explicitly toggle the remote control server
     enabled: Optional[bool] = None
+    # locally_enabled can be set to explicitly toggle the remote control
+    # servers local unix socket mode
+    locally_enabled: Optional[bool] = None
     # cert specifies the ssl/tls certificate to use
     cert: Optional[TLSSource] = None
     # cert specifies the ssl/tls server key to use
@@ -617,9 +621,23 @@ class RemoteControl(_RBase):
 
     @property
     def is_enabled(self) -> bool:
+        return self._locally_enabled() or self._remotely_enabled()
+
+    def _locally_enabled(self) -> bool:
+        return bool(self.locally_enabled)
+
+    def _remotely_enabled(self) -> bool:
         if self.enabled is not None:
             return self.enabled
         return bool(self.cert and self.key)
+
+    def enabled_features(self) -> list[str]:
+        out = []
+        if self._locally_enabled():
+            out.append(REMOTE_CONTROL_LOCAL)
+        if self._remotely_enabled():
+            out.append(REMOTE_CONTROL)
+        return out
 
 
 @resourcelib.resource('ceph.smb.cluster')
@@ -647,6 +665,9 @@ class Cluster(_RBase):
     # connect the smb cluster and all its shares to cephfs file systems
     # hosted on an external ceph cluster
     external_ceph_cluster: Optional[ExternalCephClusterSource] = None
+    # debug_level can be used to change the smb services
+    # default debugging levels
+    debug_level: Optional[dict[str, str]] = None
 
     def validate(self) -> None:
         if not self.cluster_id:
@@ -678,11 +699,13 @@ class Cluster(_RBase):
             raise ValueError(
                 'bind_addrs must have at least one value or not be set'
             )
+        validation.check_debug_level(self.debug_level)
 
     @resourcelib.customize
     def _customize_resource(rc: resourcelib.Resource) -> resourcelib.Resource:
         rc.on_condition(_present)
         rc.on_construction_error(InvalidResourceError.wrap)
+        rc.debug_level.quiet = True
         return rc
 
     @property
